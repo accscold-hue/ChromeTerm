@@ -1,19 +1,34 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Fake Terminal</title>
+  <title>Web Terminal</title>
   <style>
     body {
-      background-color: black;
+      margin: 0;
+      background: black;
       color: #00ff00;
       font-family: monospace;
       font-size: 16px;
+    }
+
+    #terminal {
       padding: 20px;
-    }
-    .terminal {
-      max-width: 800px;
+      max-width: 900px;
+      margin: auto;
       white-space: pre-wrap;
+      overflow-y: auto;
+      height: 100vh;
+      box-sizing: border-box;
     }
+
+    .line {
+      margin: 2px 0;
+    }
+
+    .prompt {
+      display: inline;
+    }
+
     input {
       background: black;
       color: #00ff00;
@@ -21,192 +36,210 @@
       outline: none;
       font-family: monospace;
       font-size: 16px;
-      width: 90%;
-    }
-    .cursor {
-      display: inline-block;
-      width: 10px;
-      background-color: #00ff00;
-      animation: blink 1s steps(2, start) infinite;
-    }
-    @keyframes blink {
-      to { visibility: hidden; }
+      width: 70%;
     }
   </style>
 </head>
 <body>
-  <div class="terminal" id="terminal">
-    <pre>
-   _  
-  | | 
-/ __)
-\__ \
-(   /
- |_| 
-    </pre>
-    <div>Type <b>help</b> to see commands.</div>
-    <br>
-  </div>
+
+<div id="terminal"></div>
 
 <script>
 const terminal = document.getElementById("terminal");
 
-// ----- Fake filesystem -----
-let filesystem = {
-  "/": ["home", "var", "etc", "readme.txt"],
-  "/home": ["user", "notes.txt"],
-  "/home/user": ["secret.txt", "todo.txt"]
+/* ===== Fake filesystem ===== */
+const fs = {
+  "/": {
+    home: {
+      user: {
+        "notes.txt": "Remember to learn JavaScript.",
+        "secret.txt": "Nothing to see here 👀"
+      }
+    },
+    "readme.txt": "Welcome to the web terminal."
+  }
 };
-let currentPath = "/";
 
-// ----- Command history -----
+let cwd = "/";
 let history = [];
 let historyIndex = -1;
 
-// ----- Create input line -----
-const inputLine = document.createElement("div");
-inputLine.innerHTML = "~$ <input id='command' autofocus>";
-terminal.appendChild(inputLine);
-const input = inputLine.querySelector("input");
-
-// ----- Helper functions -----
-function print(text, delay = 0) {
-  if(delay === 0){
-    const div = document.createElement("div");
-    div.textContent = text;
-    terminal.insertBefore(div, inputLine);
-  } else {
-    let i = 0;
-    const div = document.createElement("div");
-    terminal.insertBefore(div, inputLine);
-    const interval = setInterval(() => {
-      div.textContent += text[i];
-      i++;
-      if(i >= text.length) clearInterval(interval);
-    }, delay);
-  }
+/* ===== Utilities ===== */
+function scrollBottom() {
+  terminal.scrollTop = terminal.scrollHeight;
 }
 
-function showPrompt() {
+function print(text = "", typing = false) {
+  const line = document.createElement("div");
+  line.className = "line";
+  terminal.appendChild(line);
+
+  if (!typing) {
+    line.textContent = text;
+    scrollBottom();
+    return;
+  }
+
+  let i = 0;
+  const interval = setInterval(() => {
+    line.textContent += text[i++];
+    scrollBottom();
+    if (i >= text.length) clearInterval(interval);
+  }, 15);
+}
+
+function resolvePath(path) {
+  if (path === "/") return fs["/"];
+  const parts = path.split("/").filter(Boolean);
+  let node = fs["/"];
+  for (const p of parts) {
+    if (!node[p]) return null;
+    node = node[p];
+  }
+  return node;
+}
+
+function prompt() {
+  const line = document.createElement("div");
+  line.className = "line";
+  line.innerHTML = `<span class="prompt">user@web:${cwd}$ </span><input autofocus>`;
+  terminal.appendChild(line);
+
+  const input = line.querySelector("input");
   input.focus();
+
+  input.addEventListener("keydown", e => {
+    if (e.key === "ArrowUp") {
+      if (history.length) {
+        historyIndex = Math.max(0, historyIndex - 1);
+        input.value = history[historyIndex];
+      }
+      e.preventDefault();
+    }
+
+    if (e.key === "ArrowDown") {
+      if (history.length) {
+        historyIndex = Math.min(history.length, historyIndex + 1);
+        input.value = history[historyIndex] || "";
+      }
+      e.preventDefault();
+    }
+
+    if (e.key === "Enter") {
+      const cmd = input.value.trim();
+      history.push(cmd);
+      historyIndex = history.length;
+      line.remove();
+      print(`user@web:${cwd}$ ${cmd}`);
+      handleCommand(cmd);
+    }
+  });
 }
 
-// ----- Handle commands -----
-input.addEventListener("keydown", async function(e) {
-  if(e.key === "ArrowUp"){
-    if(history.length > 0){
-      historyIndex = (historyIndex <= 0) ? 0 : historyIndex -1;
-      input.value = history[historyIndex];
-    }
-    e.preventDefault();
+/* ===== Commands ===== */
+async function handleCommand(cmdLine) {
+  if (!cmdLine) {
+    prompt();
     return;
   }
-  if(e.key === "ArrowDown"){
-    if(history.length > 0){
-      historyIndex = (historyIndex >= history.length-1) ? history.length-1 : historyIndex +1;
-      input.value = history[historyIndex];
-    }
-    e.preventDefault();
-    return;
-  }
-  if(e.key !== "Enter") return;
 
-  const cmdLine = input.value.trim();
-  if(!cmdLine) return;
+  const [cmd, ...args] = cmdLine.split(" ");
 
-  print("~$ " + cmdLine);
-  history.push(cmdLine);
-  historyIndex = history.length;
-  input.value = "";
-
-  const parts = cmdLine.split(" ");
-  const cmd = parts[0].toLowerCase();
-  const args = parts.slice(1);
-
-  switch(cmd){
+  switch (cmd) {
     case "help":
-      print("Available commands:");
-      print(" help    - show this message");
-      print(" ping    - test GET request");
-      print(" clear   - clear terminal");
-      print(" whoami  - show username");
-      print(" echo    - print text");
-      print(" ls      - list files");
-      print(" cd      - change folder");
+      print("Available commands:", true);
+      print(" help      show this help");
+      print(" ls        list files");
+      print(" cd        change directory");
+      print(" pwd       show current path");
+      print(" cat       read a file");
+      print(" echo      print text");
+      print(" whoami    show user");
+      print(" ping      test network");
+      print(" clear     clear terminal");
+      break;
+
+    case "ls": {
+      const dir = resolvePath(cwd);
+      if (typeof dir !== "object") {
+        print("ls: not a directory");
+      } else {
+        print(Object.keys(dir).join("  "));
+      }
+      break;
+    }
+
+    case "cd": {
+      const target = args[0];
+      if (!target) break;
+
+      if (target === "..") {
+        if (cwd !== "/") {
+          cwd = "/" + cwd.split("/").filter(Boolean).slice(0, -1).join("/");
+          if (cwd === "") cwd = "/";
+        }
+      } else {
+        const newPath = cwd === "/" ? `/${target}` : `${cwd}/${target}`;
+        if (resolvePath(newPath)) cwd = newPath;
+        else print("cd: no such directory");
+      }
+      break;
+    }
+
+    case "pwd":
+      print(cwd);
+      break;
+
+    case "cat": {
+      const file = args[0];
+      if (!file) {
+        print("cat: missing file");
+        break;
+      }
+      const dir = resolvePath(cwd);
+      if (typeof dir[file] === "string") {
+        print(dir[file], true);
+      } else {
+        print("cat: file not found");
+      }
+      break;
+    }
+
+    case "echo":
+      print(args.join(" "));
+      break;
+
+    case "whoami":
+      print("user");
       break;
 
     case "ping":
       print("Pinging server...");
-      try{
-        const res = await fetch("https://api.github.com/zen");
-        const text = await res.text();
-        print("Reply: " + text);
-      }catch{
+      try {
+        const r = await fetch("https://api.github.com/zen");
+        const t = await r.text();
+        print("Reply: " + t);
+      } catch {
         print("Ping failed.");
       }
       break;
 
     case "clear":
       terminal.innerHTML = "";
-      const pre = document.createElement("pre");
-      pre.textContent = `
- _  
-| | 
-/ __)
-\\__ \\
-(   /
- |_| 
-      `;
-      terminal.appendChild(pre);
-      break;
-
-    case "whoami":
-      print("user123");
-      break;
-
-    case "echo":
-      print(args.join(" "));
-      break;
-
-    case "ls":
-      const folder = filesystem[currentPath] || [];
-      print(folder.join("  "));
-      break;
-
-    case "cd":
-      if(args.length === 0){
-        print("cd: missing folder");
-      } else {
-        const target = args[0];
-        let newPath;
-        if(target === ".."){
-          if(currentPath !== "/"){
-            const parts = currentPath.split("/").filter(p => p);
-            parts.pop();
-            newPath = "/" + parts.join("/");
-            if(newPath === "") newPath = "/";
-            currentPath = newPath;
-          }
-        } else if(filesystem[currentPath] && filesystem[currentPath].includes(target)){
-          if(currentPath === "/") newPath = "/" + target;
-          else newPath = currentPath + "/" + target;
-          if(filesystem[newPath]){
-            currentPath = newPath;
-          } else {
-            print("cd: not a folder");
-          }
-        } else {
-          print("cd: folder not found");
-        }
-      }
       break;
 
     default:
-      print(`Command not found: ${cmd}`);
+      print(`command not found: ${cmd}`);
   }
 
-  showPrompt();
-});
+  prompt();
+}
+
+/* ===== Boot ===== */
+print("Web Terminal v1.0", true);
+print("Type 'help' to begin.");
+prompt();
 </script>
+
 </body>
 </html>
