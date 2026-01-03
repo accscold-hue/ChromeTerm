@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Terminal</title>
+  <style>
+    body {
+      background-color: black;
+      color: #00ff00;
+      font-family: monospace;
+      font-size: 16px;
+      padding: 20px;
+    }
+
+    .terminal {
+      max-width: 800px;
+    }
+
+    input {
+      background: black;
+      color: #00ff00;
+      border: none;
+      outline: none;
+      font-family: monospace;
+      font-size: 16px;
+      width: 90%;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="terminal" id="terminal">
+    <pre>
+ _  
+| | 
+/ __)
+\__ \
+(   /
+ |_| 
+    </pre>
+
+    <div>Type <b>help</b> to see commands.</div>
+    <br>
+    <div>~$ <input id="command" autofocus></div>
+  </div>
+
+  <script>
+    const terminal = document.getElementById("terminal");
+    const input = document.getElementById("command");
+
+    input.addEventListener("keydown", function (e) {
+      if (e.key === "Enter") {
+        const cmd = input.value.trim();
+        input.value = "";
+
+        terminal.innerHTML += `<div>~$ ${cmd}</div>`;
+
+        if (cmd === "help") {
+          terminal.innerHTML += `
+            <div>Available commands:</div>
+            <div>- help : show this message</div>
+            <div>- ping : send a test GET request</div>
+            <div>- clear : clear the terminal</div>
+          `;
+        }
+
+        else if (cmd === "ping") {
+          terminal.innerHTML += `<div>Pinging server...</div>`;
+
+          fetch("https://api.github.com/zen")
+            .then(response => response.text())
+            .then(data => {
+              terminal.innerHTML += `<div>Reply: ${data}</div>`;
+            })
+            .catch(() => {
+              terminal.innerHTML += `<div>Ping failed.</div>`;
+            });
+        }
+
+        else if (cmd === "clear") {
+          terminal.innerHTML = `<div>~$ <input id="command" autofocus></div>`;
+          document.getElementById("command").addEventListener("keydown", arguments.callee);
+          return;
+        }
+
+        else if (cmd !== "") {
+          terminal.innerHTML += `<div>Command not found: ${cmd}</div>`;
+        }
+
+        terminal.innerHTML += `<div>~$ <input id="command" autofocus></div>`;
+        document.getElementById("command").focus();
+      }
+    });
+  </script>
+</body>
+</html>
