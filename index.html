@@ -24,9 +24,19 @@
       font-size: 16px;
       width: 90%;
     }
+
+    .cursor {
+      display: inline-block;
+      width: 10px;
+      background-color: #00ff00;
+      animation: blink 1s steps(2, start) infinite;
+    }
+
+    @keyframes blink {
+      to { visibility: hidden; }
+    }
   </style>
 </head>
-
 <body>
   <div class="terminal" id="terminal">
     <pre>
@@ -45,51 +55,82 @@
 
   <script>
     const terminal = document.getElementById("terminal");
-    const input = document.getElementById("command");
 
-    input.addEventListener("keydown", function (e) {
+    function createInputLine() {
+      terminal.innerHTML += `<div>~$ <input id="command" autofocus></div>`;
+      const newInput = document.getElementById("command");
+      newInput.focus();
+      newInput.addEventListener("keydown", handleCommand);
+    }
+
+    function handleCommand(e) {
       if (e.key === "Enter") {
-        const cmd = input.value.trim();
-        input.value = "";
+        const input = e.target;
+        const cmdLine = input.value.trim();
+        terminal.innerHTML += `<div>~$ ${cmdLine}</div>`;
+        input.remove();
 
-        terminal.innerHTML += `<div>~$ ${cmd}</div>`;
-
-        if (cmd === "help") {
-          terminal.innerHTML += `
-            <div>Available commands:</div>
-            <div>- help : show this message</div>
-            <div>- ping : send a test GET request</div>
-            <div>- clear : clear the terminal</div>
-          `;
-        }
-
-        else if (cmd === "ping") {
-          terminal.innerHTML += `<div>Pinging server...</div>`;
-
-          fetch("https://api.github.com/zen")
-            .then(response => response.text())
-            .then(data => {
-              terminal.innerHTML += `<div>Reply: ${data}</div>`;
-            })
-            .catch(() => {
-              terminal.innerHTML += `<div>Ping failed.</div>`;
-            });
-        }
-
-        else if (cmd === "clear") {
-          terminal.innerHTML = `<div>~$ <input id="command" autofocus></div>`;
-          document.getElementById("command").addEventListener("keydown", arguments.callee);
+        if (!cmdLine) {
+          createInputLine();
           return;
         }
 
-        else if (cmd !== "") {
-          terminal.innerHTML += `<div>Command not found: ${cmd}</div>`;
+        const parts = cmdLine.split(" ");
+        const cmd = parts[0].toLowerCase();
+        const args = parts.slice(1);
+
+        switch(cmd) {
+          case "help":
+            terminal.innerHTML += `
+              <div>Available commands:</div>
+              <div>- help : show this message</div>
+              <div>- ping : send a test GET request</div>
+              <div>- clear : clear the terminal</div>
+              <div>- whoami : show your username</div>
+              <div>- echo : print your message</div>
+            `;
+            break;
+
+          case "ping":
+            terminal.innerHTML += `<div>Pinging server...</div>`;
+            fetch("https://api.github.com/zen")
+              .then(resp => resp.text())
+              .then(data => terminal.innerHTML += `<div>Reply: ${data}</div>`)
+              .catch(() => terminal.innerHTML += `<div>Ping failed.</div>`);
+            break;
+
+          case "clear":
+            terminal.innerHTML = "";
+            terminal.innerHTML += `<pre>
+ _  
+| | 
+/ __)
+\__ \
+(   /
+ |_| 
+            </pre>`;
+            terminal.innerHTML += `<div>Type <b>help</b> to see commands.</div><br>`;
+            break;
+
+          case "whoami":
+            terminal.innerHTML += `<div>You are: hacker123</div>`;
+            break;
+
+          case "echo":
+            terminal.innerHTML += `<div>${args.join(" ")}</div>`;
+            break;
+
+          default:
+            terminal.innerHTML += `<div>Command not found: ${cmd}</div>`;
         }
 
-        terminal.innerHTML += `<div>~$ <input id="command" autofocus></div>`;
-        document.getElementById("command").focus();
+        createInputLine();
       }
-    });
+    }
+
+    // Initial input
+    const input = document.getElementById("command");
+    input.addEventListener("keydown", handleCommand);
   </script>
 </body>
 </html>
